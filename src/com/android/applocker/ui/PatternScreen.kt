@@ -21,8 +21,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import android.provider.Settings
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.draw.clip
@@ -52,6 +54,18 @@ fun PatternScreen(
     var errorMessage by remember { mutableStateOf("") }
     var dotPositions by remember { mutableStateOf<Map<Int, Offset>>(emptyMap()) }
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val isPatternVisible = remember {
+        try {
+            Settings.Secure.getInt(
+                context.contentResolver,
+                Settings.Secure.LOCK_PATTERN_VISIBLE,
+                1
+            ) != 0
+        } catch (e: Exception) {
+            true
+        }
+    }
     
     
     var isVisible by remember { mutableStateOf(false) }
@@ -285,51 +299,53 @@ fun PatternScreen(
                     }
                     dotPositions = positions
                     
-                    if (selectedDots.size > 1) {
-                        for (i in 0 until selectedDots.size - 1) {
-                            val from = positions[selectedDots[i]]!!
-                            val to = positions[selectedDots[i + 1]]!!
+                    if (isSetup || isPatternVisible) {
+                        if (selectedDots.size > 1) {
+                            for (i in 0 until selectedDots.size - 1) {
+                                val from = positions[selectedDots[i]]!!
+                                val to = positions[selectedDots[i + 1]]!!
+                                drawLine(
+                                    color = lineColor,
+                                    start = from,
+                                    end = to,
+                                    strokeWidth = 8.dp.toPx(),
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                        }
+                        
+                        if (selectedDots.isNotEmpty() && currentTouchPosition != null) {
+                            val lastDot = positions[selectedDots.last()]!!
                             drawLine(
-                                color = lineColor,
-                                start = from,
-                                end = to,
+                                color = lineColor.copy(alpha = 0.5f),
+                                start = lastDot,
+                                end = currentTouchPosition!!,
                                 strokeWidth = 8.dp.toPx(),
                                 cap = StrokeCap.Round
                             )
                         }
                     }
                     
-                    if (selectedDots.isNotEmpty() && currentTouchPosition != null) {
-                        val lastDot = positions[selectedDots.last()]!!
-                        drawLine(
-                            color = lineColor.copy(alpha = 0.5f),
-                            start = lastDot,
-                            end = currentTouchPosition!!,
-                            strokeWidth = 8.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                    }
-                    
                     for ((index, center) in positions) {
                         val isSelected = selectedDots.contains(index)
+                        val showSelection = isSelected && (isSetup || isPatternVisible || isError)
                         val color = when {
                             isError -> errorColor
-                            isSelected -> dotColor
+                            showSelection -> dotColor
                             else -> dotInactiveColor
                         }
                         
-                        
-                        val scale = dotScales.getOrNull(index)?.value ?: 1f
+                        val scale = if (showSelection) (dotScales.getOrNull(index)?.value ?: 1f) else 1f
                         
                         drawCircle(
-                            color = color.copy(alpha = if (isSelected) 0.3f else 0.2f),
+                            color = color.copy(alpha = if (showSelection) 0.3f else 0.2f),
                             radius = dotRadius * 2.5f * scale,
                             center = center
                         )
                         
                         drawCircle(
                             color = color,
-                            radius = (if (isSelected) dotRadius * 1.3f else dotRadius) * scale,
+                            radius = (if (showSelection) dotRadius * 1.3f else dotRadius) * scale,
                             center = center
                         )
                     }
